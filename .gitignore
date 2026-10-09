@@ -25,3 +25,7 @@ data/
 .vscode/
 .DS_Store
 Thumbs.db
+
+
+# Local conversation history
+repoguide_history.db

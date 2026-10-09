@@ -1,10 +1,16 @@
+
 [theme]
-base = "light"
-primaryColor = "#4263EB"
-backgroundColor = "#F7F9FE"
-secondaryBackgroundColor = "#EDF3FF"
-textColor = "#172554"
+primaryColor = "#4F46E5"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F8FAFC"
+textColor = "#1E293B"
 font = "sans serif"
+
+[client]
+toolbarMode = "minimal"
+
+[ui]
+hideTopBar = true
 
 [server]
 fileWatcherType = "none"

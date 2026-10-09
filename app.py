@@ -1,4 +1,3 @@
-
 import json
 import os
 import re
@@ -20,7 +19,7 @@ from src.gemini_client import generate_answer
 
 st.set_page_config(
     page_title="RepoGuide | GitHub Knowledge Assistant",
-    page_icon="📘",
+    page_icon="🧭",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -30,6 +29,26 @@ DB_FILE = os.path.join(
     "repoguide_history.db",
 )
 TABLE_NAME = "repoguide_conversations"
+
+
+# One shared logo is used in both the sidebar and the main header.
+REPOGUIDE_LOGO = r"""<svg viewBox="0 0 100 100" role="img" aria-label="RepoGuide logo" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="rgBookGradient" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#DCEAFF"/>
+    </linearGradient>
+  </defs>
+  <path d="M12 48 Q29 42 46 54 L46 80 Q29 68 12 75 Z" fill="url(#rgBookGradient)"/>
+  <path d="M88 48 Q71 42 54 54 L54 80 Q71 68 88 75 Z" fill="url(#rgBookGradient)"/>
+  <path d="M50 55 L50 82" stroke="#BBD4FF" stroke-width="3" stroke-linecap="round"/>
+  <path d="M17 54 Q30 51 40 59 M17 63 Q30 60 40 68 M83 54 Q70 51 60 59 M83 63 Q70 60 60 68" fill="none" stroke="#A7C5FF" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M50 10 L77 23 L74 48 Q67 61 50 68 Q33 61 26 48 L23 23 Z" fill="#0F2F78" stroke="#9FC1FF" stroke-width="2.5"/>
+  <path d="M50 17 L70 27 L68 45 Q62 54 50 60 Q38 54 32 45 L30 27 Z" fill="#245ED8"/>
+  <path d="M44 31 L36 38 L44 45 M56 31 L64 38 L56 45 M53 29 L47 47" fill="none" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <g class="rg-orbit" fill="none" stroke="#D9E7FF" stroke-width="2" stroke-linecap="round"><path d="M75 37 Q88 39 85 48" stroke-dasharray="3 4"/><circle class="rg-node" cx="85" cy="48" r="3.1" fill="#FFFFFF" stroke="none"/></g>
+  <path class="rg-sparkle" d="M80 13 L82 19 L88 21 L82 23 L80 29 L78 23 L72 21 L78 19 Z" fill="#C7DCFF"/>
+</svg>"""
 
 
 # --------------------------------------------------
@@ -192,7 +211,6 @@ def load_conversations():
         """, (workspace_id,)).fetchall()
 
     chats = []
-
     for row in rows:
         chat = dict(row)
         chat["messages"] = json.loads(chat["messages"] or "[]")
@@ -220,7 +238,7 @@ def delete_conversation(chat_id):
 
 
 # --------------------------------------------------
-# SESSION STATE
+# SESSION STATE AND CHAT SELECTION
 # --------------------------------------------------
 
 if "repository_data" not in st.session_state:
@@ -250,7 +268,6 @@ def get_active_chat():
     for chat in st.session_state.chats:
         if chat["id"] == st.session_state.active_chat_id:
             return chat
-
     return None
 
 
@@ -282,17 +299,15 @@ try:
     if (
         st.session_state.active_chat_id
         and not any(
-            c["id"] == st.session_state.active_chat_id
-            for c in st.session_state.chats
+            chat["id"] == st.session_state.active_chat_id
+            for chat in st.session_state.chats
         )
     ):
         st.session_state.active_chat_id = None
 
     if not st.session_state.active_chat_id:
         if st.session_state.chats:
-            st.session_state.active_chat_id = (
-                st.session_state.chats[0]["id"]
-            )
+            st.session_state.active_chat_id = st.session_state.chats[0]["id"]
         else:
             create_new_chat()
 
@@ -305,7 +320,7 @@ except Exception:
 
 
 # --------------------------------------------------
-# REPOSITORY URL VALIDATION
+# URL VALIDATION
 # --------------------------------------------------
 
 def parse_repository_url(value):
@@ -325,9 +340,7 @@ def parse_repository_url(value):
     if parsed.scheme not in ("http", "https"):
         raise ValueError("Please enter a valid GitHub URL.")
 
-    if parsed.netloc.lower() not in (
-        "github.com", "www.github.com"
-    ):
+    if parsed.netloc.lower() not in ("github.com", "www.github.com"):
         raise ValueError("Please use a URL from github.com.")
 
     parts = [
@@ -370,95 +383,232 @@ def load_repository(owner, repo):
 
 
 # --------------------------------------------------
-# PROFESSIONAL THEME AND CREATIVE LOGO
+# PROFESSIONAL BRANDING AND CUSTOM CSS
 # --------------------------------------------------
 
 st.markdown("""
 <style>
+:root {
+    --rg-navy: #132448;
+    --rg-blue: #2563eb;
+    --rg-blue-light: #eff5ff;
+    --rg-muted: #64748b;
+    --rg-border: #e1e9f5;
+}
+
 .stApp {
     background: #f7f9fd;
-    color: #172554;
 }
 
 .block-container {
-    max-width: 1180px;
-    padding-top: 1.4rem;
-    padding-bottom: 2.5rem;
+    max-width: 1120px;
+    padding-top: 1.45rem;
+    padding-bottom: 2.8rem;
 }
 
-section[data-testid="stSidebar"] {
-    background: #ffffff;
-    border-right: 1px solid #e2e8f0;
-}
-
-.brand-header {
+.rg-sidebar-brand {
     display: flex;
     align-items: center;
-    gap: 17px;
-    padding: 24px 28px;
-    margin-bottom: 26px;
-    border: 1px solid #dbeafe;
-    border-radius: 20px;
-    background:
-        radial-gradient(
-            circle at 90% 10%,
-            rgba(96, 165, 250, 0.18),
-            transparent 32%
-        ),
-        linear-gradient(120deg, #eff6ff 0%, #ffffff 75%);
-    box-shadow: 0 8px 28px rgba(30, 64, 175, 0.045);
+    gap: 10px;
+    padding: 4px 2px 12px 2px;
+    margin-bottom: 5px;
 }
 
-.brand-logo {
-    flex: 0 0 76px;
-    width: 76px;
-    height: 76px;
+.rg-sidebar-mark {
+    width: 43px;
+    height: 43px;
+    min-width: 43px;
     display: flex;
     align-items: center;
     justify-content: center;
+    border-radius: 13px;
+    background: linear-gradient(145deg, #3778f6 0%, #1745b8 55%, #6d5dfc 100%);
+    box-shadow: 0 5px 13px rgba(37, 99, 235, .22);
+    transition: transform .25s ease, box-shadow .25s ease;
 }
 
-.brand-logo svg {
-    width: 76px;
-    height: 76px;
-    filter: drop-shadow(0 5px 7px rgba(37, 99, 235, 0.16));
+.rg-sidebar-mark:hover {
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 8px 18px rgba(37, 99, 235, .32);
+}
+
+.rg-sidebar-mark svg { width: 36px; height: 36px; display: block; overflow: visible; }
+
+.rg-sidebar-mark .rg-orbit { transform-origin: 50px 38px; animation: rg-orbit 7s linear infinite; }
+.rg-sidebar-mark .rg-sparkle { transform-origin: 80px 21px; animation: rg-sparkle 2.8s ease-in-out infinite; }
+.rg-sidebar-mark .rg-node { transform-box: fill-box; transform-origin: center; animation: rg-node-pulse 2.2s ease-in-out infinite; }
+
+.rg-sidebar-subtitle { color: #64748b; font-size: .68rem; line-height: 1.3; margin-top: 3px; }
+
+.rg-sidebar-wordmark {
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: -0.7px;
+    color: #132448;
+    line-height: 1.1;
+}
+
+.rg-sidebar-wordmark span { color: #2563eb; }
+
+.hero {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    overflow: hidden;
+    padding: 30px 32px;
+    background:
+        radial-gradient(circle at 92% 10%, rgba(96, 165, 250, .20), transparent 28%),
+        linear-gradient(120deg, #edf4ff 0%, #ffffff 70%);
+    border: 1px solid #dce7fb;
+    border-radius: 22px;
+    margin-bottom: 28px;
+    box-shadow: 0 8px 28px rgba(31, 64, 120, .045);
+}
+
+.hero::after {
+    content: "";
+    position: absolute;
+    width: 210px;
+    height: 210px;
+    right: -95px;
+    bottom: -145px;
+    border: 1px solid rgba(37, 99, 235, .16);
+    border-radius: 50%;
+    box-shadow:
+        0 0 0 22px rgba(37, 99, 235, .035),
+        0 0 0 44px rgba(37, 99, 235, .025);
+    pointer-events: none;
+}
+
+.brand-mark {
+    flex: 0 0 88px;
+    width: 88px;
+    height: 88px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 24px;
+    background: linear-gradient(145deg, #3778f6 0%, #1745b8 55%, #6d5dfc 100%);
+    box-shadow:
+        0 10px 22px rgba(37, 99, 235, .23),
+        inset 0 1px 0 rgba(255, 255, 255, .32);
+    transition: transform .28s ease, box-shadow .28s ease;
+    animation: rg-logo-enter .65s ease-out both;
+    cursor: default;
+}
+
+.brand-mark:hover {
+    transform: translateY(-4px) rotate(-2deg) scale(1.045);
+    box-shadow: 0 15px 30px rgba(37, 99, 235, .34),
+        inset 0 1px 0 rgba(255, 255, 255, .38);
+}
+
+.brand-mark svg {
+    width: 68px;
+    height: 68px;
+    display: block;
+    overflow: visible;
+}
+
+.brand-mark .rg-orbit {
+    transform-origin: 50px 38px;
+    animation: rg-orbit 7s linear infinite;
+}
+
+.brand-mark .rg-sparkle {
+    transform-origin: 80px 21px;
+    animation: rg-sparkle 2.8s ease-in-out infinite;
+}
+
+.brand-mark .rg-node {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: rg-node-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes rg-logo-enter {
+    from { opacity: 0; transform: translateY(8px) scale(.94); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes rg-orbit {
+    to { transform: rotate(360deg); }
+}
+
+@keyframes rg-sparkle {
+    0%, 100% { opacity: .8; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.16); }
+}
+
+@keyframes rg-node-pulse {
+    0%, 100% { opacity: .75; }
+    50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .brand-mark, .brand-mark svg *, .brand-mark .rg-orbit,
+    .brand-mark .rg-sparkle, .brand-mark .rg-node,
+    .rg-sidebar-mark .rg-orbit, .rg-sidebar-mark .rg-sparkle,
+    .rg-sidebar-mark .rg-node {
+        animation: none !important;
+        transition: none !important;
+    }
+}
+
+.hero-copy {
+    position: relative;
+    z-index: 1;
+    min-width: 0;
 }
 
 .brand-title {
-    margin: 0;
-    color: #14264b;
-    font-size: 2.25rem;
-    line-height: 1.15;
+    margin: 0 0 8px 0;
+    color: var(--rg-navy);
+    font-size: clamp(2rem, 4vw, 2.65rem);
+    line-height: 1.12;
     font-weight: 800;
-    letter-spacing: -1.2px;
+    letter-spacing: -1.5px;
 }
 
 .brand-title .brand-accent {
-    color: #2563eb;
+    color: var(--rg-blue);
 }
 
-.brand-tagline {
-    margin-top: 9px;
-    color: #64748b;
-    font-size: 1rem;
-    line-height: 1.6;
-}
-
-.brand-pill {
-    display: inline-block;
-    margin-top: 11px;
+.brand-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 10px;
     padding: 5px 10px;
-    border: 1px solid #bfdbfe;
-    border-radius: 20px;
-    background: #eff6ff;
-    color: #1d4ed8;
-    font-size: 0.76rem;
-    font-weight: 650;
-    letter-spacing: 0.2px;
+    border: 1px solid #d8e5ff;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .76);
+    color: #315aab;
+    font-size: .76rem;
+    font-weight: 700;
+    letter-spacing: .45px;
+    text-transform: uppercase;
+}
+
+.brand-kicker-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #2e72f5;
+    box-shadow: 0 0 0 3px rgba(46, 114, 245, .12);
+}
+
+.brand-description {
+    max-width: 680px;
+    margin: 0;
+    color: #5c6e8d;
+    font-size: 1rem;
+    line-height: 1.75;
 }
 
 div[data-testid="stTextInput"] input {
-    min-height: 47px;
+    min-height: 48px;
     border-radius: 10px;
 }
 
@@ -466,16 +616,25 @@ div[data-testid="stButton"] button {
     min-height: 42px;
     border-radius: 10px;
     font-weight: 600;
-    transition: all 0.15s ease;
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+div[data-testid="stButton"] button:hover {
+    border-color: #93b4fa;
+    box-shadow: 0 3px 12px rgba(37, 99, 235, .08);
 }
 
 div[data-testid="stChatMessage"] {
     border-radius: 12px;
 }
 
+section[data-testid="stSidebar"] {
+    border-right: 1px solid #e2e8f0;
+}
+
 .note {
     color: #64748b;
-    font-size: 0.85rem;
+    font-size: .85rem;
 }
 
 footer {
@@ -483,146 +642,41 @@ footer {
 }
 
 @media (max-width: 600px) {
-    .brand-header {
-        padding: 18px;
-        gap: 12px;
+    .hero {
+        align-items: flex-start;
+        gap: 15px;
+        padding: 21px 18px;
+        border-radius: 17px;
     }
 
-    .brand-logo,
-    .brand-logo svg {
-        width: 56px;
-        height: 56px;
+    .brand-mark {
+        flex-basis: 58px;
+        width: 58px;
+        height: 58px;
+        border-radius: 17px;
     }
 
-    .brand-logo {
-        flex-basis: 56px;
+    .brand-mark svg {
+        width: 47px;
+        height: 47px;
     }
 
     .brand-title {
-        font-size: 1.75rem;
+        font-size: 1.8rem;
+        letter-spacing: -1px;
     }
 
-    .brand-tagline {
-        font-size: 0.88rem;
+    .brand-description {
+        font-size: .9rem;
+        line-height: 1.55;
+    }
+
+    .brand-kicker {
+        font-size: .65rem;
     }
 }
 </style>
 """, unsafe_allow_html=True)
-
-
-def render_brand_header():
-    """Render the RepoGuide logo and product heading."""
-    logo_svg = """
-    <svg xmlns="http://www.w3.org/2000/svg"
-         viewBox="0 0 100 100"
-         role="img"
-         aria-label="RepoGuide code book logo">
-        <defs>
-            <linearGradient id="bookBlue"
-                            x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stop-color="#60A5FA"/>
-                <stop offset="100%" stop-color="#2563EB"/>
-            </linearGradient>
-            <linearGradient id="shieldBlue"
-                            x1="0" y1="0" x2="0.9" y2="1">
-                <stop offset="0%" stop-color="#1E40AF"/>
-                <stop offset="100%" stop-color="#2563EB"/>
-            </linearGradient>
-        </defs>
-
-        <!-- Open book -->
-        <path d="M12 45
-                 C25 40 37 43 50 52
-                 C63 43 75 40 88 45
-                 L88 78
-                 C74 73 62 77 50 86
-                 C38 77 26 73 12 78 Z"
-              fill="url(#bookBlue)"/>
-
-        <path d="M19 51
-                 C30 48 39 51 47 58
-                 L47 76
-                 C38 69 29 67 19 69 Z"
-              fill="#FFFFFF"/>
-
-        <path d="M53 58
-                 C61 51 70 48 81 51
-                 L81 69
-                 C71 67 62 69 53 76 Z"
-              fill="#DBEAFE"/>
-
-        <!-- Code shield -->
-        <path d="M50 8
-                 L78 20
-                 L78 43
-                 C78 59 66 69 50 77
-                 C34 69 22 59 22 43
-                 L22 20 Z"
-              fill="url(#shieldBlue)"
-              stroke="#FFFFFF"
-              stroke-width="3"/>
-
-        <path d="M50 16
-                 L70 25
-                 L70 42
-                 C70 54 61 62 50 68
-                 C39 62 30 54 30 42
-                 L30 25 Z"
-              fill="none"
-              stroke="#93C5FD"
-              stroke-width="1.5"/>
-
-        <!-- Code brackets -->
-        <path d="M43 33 L36 40 L43 47"
-              fill="none"
-              stroke="#FFFFFF"
-              stroke-width="3.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"/>
-
-        <path d="M57 33 L64 40 L57 47"
-              fill="none"
-              stroke="#FFFFFF"
-              stroke-width="3.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"/>
-
-        <path d="M53 30 L47 50"
-              fill="none"
-              stroke="#BFDBFE"
-              stroke-width="3"
-              stroke-linecap="round"/>
-    </svg>
-    """
-
-    import html
-
-    safe_logo = logo_svg.strip()
-    tagline = html.escape(
-        "Your AI-powered GitHub Repository Knowledge Assistant."
-    )
-
-    st.markdown(
-        f"""
-        <div class="brand-header">
-            <div class="brand-logo">
-                {safe_logo}
-            </div>
-            <div>
-                <h1 class="brand-title">
-                    Repo<span class="brand-accent">Guide</span>
-                </h1>
-                <div class="brand-tagline">{tagline}<br>
-                    Explore code. Understand projects. Build smarter.
-                </div>
-                <span class="brand-pill">
-                    AI-POWERED REPOSITORY EXPLORATION
-                </span>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
 
 
 # --------------------------------------------------
@@ -630,7 +684,16 @@ def render_brand_header():
 # --------------------------------------------------
 
 with st.sidebar:
-    st.markdown("## 📘 RepoGuide")
+    # Compact matching logo and title in the top-left sidebar corner.
+    st.markdown(f"""
+    <div class="rg-sidebar-brand">
+      <div class="rg-sidebar-mark" title="RepoGuide">{REPOGUIDE_LOGO}</div>
+      <div>
+        <div class="rg-sidebar-wordmark">Repo<span>Guide</span></div>
+        <div class="rg-sidebar-subtitle">AI Repository Assistant</div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
     st.caption("Your repository conversations")
 
     if st.button(
@@ -671,7 +734,7 @@ with st.sidebar:
 
     st.divider()
 
-    # Storage status text intentionally omitted.
+    # Storage status label intentionally omitted from the UI.
 
     active_for_delete = get_active_chat()
 
@@ -700,11 +763,19 @@ with st.sidebar:
 
 
 # --------------------------------------------------
-# HEADER
+# PROFESSIONAL HEADER WITH EMBEDDED SVG LOGO
 # --------------------------------------------------
 
-render_brand_header()
-
+st.markdown(f"""
+<div class="hero">
+    <div class="brand-mark" aria-label="RepoGuide logo">{REPOGUIDE_LOGO}</div>
+    <div class="hero-copy">
+        <div class="brand-kicker"><span class="brand-kicker-dot"></span>AI-powered developer tool</div>
+        <h1 class="brand-title">Repo<span class="brand-accent">Guide</span></h1>
+        <p class="brand-description">Your AI-powered GitHub Repository Assistant. Connect a repository, explore its codebase, understand project structure, and ask questions with answers grounded in repository files.</p>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 # --------------------------------------------------
 # ACTIVE CHAT AND REPOSITORY RESTORATION
@@ -745,10 +816,7 @@ else:
 # --------------------------------------------------
 
 st.markdown("### Connect a repository")
-
-st.write(
-    "Enter a public GitHub repository URL to explore its code."
-)
+st.write("Enter a public GitHub repository URL to explore its code.")
 
 with st.container(border=True):
     st.text_input(
@@ -778,7 +846,6 @@ if connect_clicked:
             repository_data = load_repository(owner, repo)
 
         active_chat = get_active_chat()
-
         active_chat["repo_url"] = normalized_url
         active_chat["repo_owner"] = owner
         active_chat["repo_name"] = repo
@@ -867,9 +934,7 @@ if repository_ready:
         "Ask anything about this repository..."
     )
 
-    question = (
-        st.session_state.pending_question or typed_question
-    )
+    question = st.session_state.pending_question or typed_question
 
     if question:
         st.session_state.pending_question = ""
@@ -909,10 +974,7 @@ if repository_ready:
                             "about a specific file or function."
                         )
                     else:
-                        answer = generate_answer(
-                            question,
-                            retrieved_chunks,
-                        )
+                        answer = generate_answer(question, retrieved_chunks)
 
                 st.markdown(answer)
 
@@ -973,9 +1035,7 @@ elif active_chat and active_chat.get("repo_url"):
     st.info("Restoring the repository. Please wait.")
 
 else:
-    st.info(
-        "Connect a public GitHub repository to start a conversation."
-    )
+    st.info("Connect a public GitHub repository to start a conversation.")
 
 
 # --------------------------------------------------
