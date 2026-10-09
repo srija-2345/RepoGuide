@@ -133,7 +133,8 @@ def parse_repository_url(value):
         raise ValueError("Please use a URL from github.com.")
 
     parts = [
-        part for part in parsed.path.strip("/").split("/")
+        part
+        for part in parsed.path.strip("/").split("/")
         if part
     ]
 
@@ -163,11 +164,19 @@ def parse_repository_url(value):
 @st.cache_resource(show_spinner=False, max_entries=5)
 def load_repository(owner, repo):
     """
-    Build the repository chunks and vector index.
-    Matches src/retrieve.py.
+    Build and cache the chunks and vector index for a repository.
     """
     chunks, index = build_repository_index(owner, repo)
-    return {"chunks": chunks, "index": index}
+
+    if not chunks:
+        raise ValueError(
+            "No supported source files were found in this repository."
+        )
+
+    return {
+        "chunks": chunks,
+        "index": index,
+    }
 
 
 # --------------------------------------------------
@@ -204,7 +213,10 @@ with st.container(border=True):
         "GitHub repository URL",
         key="repo_input",
         placeholder="https://github.com/owner/repository",
-        help="Example: https://github.com/srija-2345/gesture-based-brightness-control",
+        help=(
+            "Example: "
+            "https://github.com/srija-2345/gesture-based-brightness-control"
+        ),
     )
 
     connect_clicked = st.button(
@@ -237,6 +249,7 @@ if connect_clicked:
         st.session_state.repo_name = repo
         st.session_state.repo_url = normalized_url
 
+        # Load repository files and build the search index.
         with st.spinner(
             "Fetching files and building the repository search index..."
         ):
@@ -247,6 +260,7 @@ if connect_clicked:
         st.success("Repository connected successfully!")
 
     except Exception as error:
+        st.session_state.repository_data = None
         st.error(f"Could not connect to the repository: {error}")
 
 
@@ -268,6 +282,7 @@ if (
                 f"**📁 {st.session_state.repo_owner}/"
                 f"{st.session_state.repo_name}**"
             )
+
             st.markdown(
                 f"[View on GitHub]({st.session_state.repo_url})"
             )
@@ -275,19 +290,22 @@ if (
         with right:
             st.success("Ready")
 
-    # Suggested questions
+    # --------------------------------------------------
+    # GENERIC SUGGESTED QUESTIONS
+    # --------------------------------------------------
+
     st.markdown("### Suggested questions")
 
-    suggestions = [
+    suggested_questions = [
         "What does this repository do?",
-        "How does the application detect hand gestures?",
         "Explain the main files in this project.",
         "Which libraries and technologies are used?",
+        "How does the main functionality work?",
     ]
 
     col1, col2 = st.columns(2)
 
-    for i, question in enumerate(suggestions):
+    for i, question in enumerate(suggested_questions):
         target_col = col1 if i % 2 == 0 else col2
 
         with target_col:
@@ -297,8 +315,12 @@ if (
                 use_container_width=True,
             ):
                 st.session_state.pending_question = question
+                st.rerun()
 
-    # Display conversation
+    # --------------------------------------------------
+    # DISPLAY CHAT HISTORY
+    # --------------------------------------------------
+
     st.markdown("### Ask RepoGuide")
 
     for message in st.session_state.chat_history:
@@ -310,7 +332,10 @@ if (
                     for source in message["sources"]:
                         st.markdown(source)
 
-    # Chat input
+    # --------------------------------------------------
+    # CHAT INPUT
+    # --------------------------------------------------
+
     typed_question = st.chat_input(
         "Ask anything about this repository..."
     )
@@ -349,13 +374,22 @@ if (
                         top_k=3,
                     )
 
-                    answer = generate_answer(
-                        question,
-                        retrieved_chunks,
-                    )
+                    if not retrieved_chunks:
+                        answer = (
+                            "I couldn't find relevant information in the "
+                            "indexed repository files for that question. "
+                            "Try asking about a specific file, function, "
+                            "class, or feature."
+                        )
+                    else:
+                        answer = generate_answer(
+                            question,
+                            retrieved_chunks,
+                        )
 
                 st.markdown(answer)
 
+                # Build links to the files used as sources.
                 sources = []
                 seen_paths = set()
 
@@ -366,7 +400,6 @@ if (
                         continue
 
                     seen_paths.add(path)
-
                     encoded_path = quote(path, safe="/")
 
                     source_url = (
@@ -392,11 +425,13 @@ if (
                 )
 
         except Exception as error:
+            # Details are written to the app logs, not shown to users.
             print(f"RepoGuide error: {error}")
 
             error_message = (
                 "Sorry, I couldn't process that question. "
-                "Please check the terminal for details and try again."
+                "Please try again. If the problem continues, "
+                "check the app logs."
             )
 
             st.error(error_message)
@@ -408,6 +443,10 @@ if (
                     "sources": [],
                 }
             )
+
+    # --------------------------------------------------
+    # CLEAR CONVERSATION
+    # --------------------------------------------------
 
     if st.session_state.chat_history:
         if st.button("Clear conversation"):
