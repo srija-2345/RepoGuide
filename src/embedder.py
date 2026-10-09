@@ -5,7 +5,14 @@ model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 
 
 def generate_embeddings(texts):
-    return model.encode(texts, convert_to_numpy=True)
+    if not texts:
+        return model.encode([], convert_to_numpy=True)
+
+    return model.encode(
+        texts,
+        convert_to_numpy=True,
+        normalize_embeddings=True
+    )
 
 
 if __name__ == "__main__":
