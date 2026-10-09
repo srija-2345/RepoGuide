@@ -12,7 +12,16 @@ import streamlit as st
 from src.retrieve import build_repository_index, search_repository
 from src.gemini_client import generate_answer
 
-
+st.markdown(
+    """
+    <style>
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        [data-testid="stToolbar"] {visibility: hidden;}
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 # --------------------------------------------------
 # PAGE CONFIGURATION
 # --------------------------------------------------
