@@ -24,6 +24,14 @@ RepoGuide is an AI-powered assistant designed to help developers understand GitH
 
 Currently in the initial setup phase. Features will be implemented and tested incrementally.
 
+## Chat storage
+
+Chat history is stored in a local SQLite database file named
+`repoguide_history.db`. No external database service or database credentials
+are required. On hosted platforms, local files may be removed when the app
+restarts or is redeployed, so this storage is best for development or
+temporary chat history.
+
 ## Goals
 
 - Improve understanding of unfamiliar codebases.

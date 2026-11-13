@@ -6,7 +6,6 @@ import uuid
 from datetime import datetime, timezone
 from urllib.parse import quote, urlparse
 
-import requests
 import streamlit as st
 
 from src.retrieve import build_repository_index, search_repository
@@ -37,7 +36,6 @@ DB_FILE = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     "repoguide_history.db",
 )
-TABLE_NAME = "repoguide_conversations"
 
 
 # One shared logo is used in both the sidebar and the main header.
@@ -58,53 +56,6 @@ REPOGUIDE_LOGO = r"""<svg viewBox="0 0 100 100" role="img" aria-label="RepoGuide
   <g class="rg-orbit" fill="none" stroke="#D9E7FF" stroke-width="2" stroke-linecap="round"><path d="M75 37 Q88 39 85 48" stroke-dasharray="3 4"/><circle class="rg-node" cx="85" cy="48" r="3.1" fill="#FFFFFF" stroke="none"/></g>
   <path class="rg-sparkle" d="M80 13 L82 19 L88 21 L82 23 L80 29 L78 23 L72 21 L78 19 Z" fill="#C7DCFF"/>
 </svg>"""
-
-
-# --------------------------------------------------
-# DATABASE CONFIGURATION
-# --------------------------------------------------
-
-def get_setting(name):
-    try:
-        value = st.secrets.get(name, "")
-        if value:
-            return str(value).strip()
-    except Exception:
-        pass
-
-    return os.getenv(name, "").strip()
-
-
-SUPABASE_URL = get_setting("SUPABASE_URL").rstrip("/")
-SUPABASE_KEY = (
-    get_setting("SUPABASE_SECRET_KEY")
-    or get_setting("SUPABASE_SERVICE_ROLE_KEY")
-)
-USE_SUPABASE = bool(SUPABASE_URL and SUPABASE_KEY)
-
-
-def db_request(method, path="", **kwargs):
-    """Send a request to the Supabase REST API."""
-    headers = {
-        "apikey": SUPABASE_KEY,
-        "Authorization": f"Bearer {SUPABASE_KEY}",
-        "Content-Type": "application/json",
-        "Prefer": "resolution=merge-duplicates,return=minimal",
-    }
-
-    response = requests.request(
-        method,
-        f"{SUPABASE_URL}/rest/v1/{TABLE_NAME}{path}",
-        headers=headers,
-        timeout=30,
-        **kwargs,
-    )
-    response.raise_for_status()
-
-    if response.text:
-        return response.json()
-
-    return None
 
 
 def init_local_db():
@@ -161,56 +112,33 @@ def save_conversation(chat):
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    if USE_SUPABASE:
-        db_request(
-            "POST",
-            "?on_conflict=id",
-            params={"select": "id"},
-            json=row,
-        )
-    else:
-        with sqlite3.connect(DB_FILE, timeout=20) as connection:
-            connection.execute("""
-                INSERT INTO conversations
-                (id, workspace_id, title, repo_url, repo_owner,
-                 repo_name, messages, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET
-                    title=excluded.title,
-                    repo_url=excluded.repo_url,
-                    repo_owner=excluded.repo_owner,
-                    repo_name=excluded.repo_name,
-                    messages=excluded.messages,
-                    updated_at=excluded.updated_at
-            """, (
-                row["id"],
-                row["workspace_id"],
-                row["title"],
-                row["repo_url"],
-                row["repo_owner"],
-                row["repo_name"],
-                json.dumps(row["messages"]),
-                row["updated_at"],
-            ))
+    with sqlite3.connect(DB_FILE, timeout=20) as connection:
+        connection.execute("""
+            INSERT INTO conversations
+            (id, workspace_id, title, repo_url, repo_owner,
+             repo_name, messages, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                title=excluded.title,
+                repo_url=excluded.repo_url,
+                repo_owner=excluded.repo_owner,
+                repo_name=excluded.repo_name,
+                messages=excluded.messages,
+                updated_at=excluded.updated_at
+        """, (
+            row["id"],
+            row["workspace_id"],
+            row["title"],
+            row["repo_url"],
+            row["repo_owner"],
+            row["repo_name"],
+            json.dumps(row["messages"]),
+            row["updated_at"],
+        ))
 
 
 def load_conversations():
     """Load conversations for the current workspace."""
-    if USE_SUPABASE:
-        rows = db_request(
-            "GET",
-            "",
-            params={
-                "select": (
-                    "id,workspace_id,title,repo_url,repo_owner,"
-                    "repo_name,messages,updated_at"
-                ),
-                "workspace_id": f"eq.{workspace_id}",
-                "order": "updated_at.desc",
-            },
-        )
-        return rows or []
-
     with sqlite3.connect(DB_FILE, timeout=20) as connection:
         connection.row_factory = sqlite3.Row
         rows = connection.execute("""
@@ -229,21 +157,11 @@ def load_conversations():
 
 
 def delete_conversation(chat_id):
-    if USE_SUPABASE:
-        db_request(
-            "DELETE",
-            "",
-            params={
-                "id": f"eq.{chat_id}",
-                "workspace_id": f"eq.{workspace_id}",
-            },
-        )
-    else:
-        with sqlite3.connect(DB_FILE, timeout=20) as connection:
-            connection.execute("""
-                DELETE FROM conversations
-                WHERE id = ? AND workspace_id = ?
-            """, (chat_id, workspace_id))
+    with sqlite3.connect(DB_FILE, timeout=20) as connection:
+        connection.execute("""
+            DELETE FROM conversations
+            WHERE id = ? AND workspace_id = ?
+        """, (chat_id, workspace_id))
 
 
 # --------------------------------------------------
@@ -320,10 +238,9 @@ try:
         else:
             create_new_chat()
 
-except Exception:
+except Exception as error:
     st.error(
-        "Could not load chat history from the database. "
-        "Check your database configuration and table."
+        f"Could not load local chat history. Details: {error}"
     )
     st.stop()
 
@@ -743,7 +660,7 @@ with st.sidebar:
 
     st.divider()
 
-    # Storage status label intentionally omitted from the UI.
+    st.caption("Chat storage: local SQLite")
 
     active_for_delete = get_active_chat()
 
